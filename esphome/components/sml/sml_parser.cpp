@@ -21,13 +21,13 @@ SmlFile::SmlFile(bytes buffer) : buffer_(std::move(buffer)) {
 
 bool SmlFile::setup_node(SmlNode *node) {
   uint8_t type = this->buffer_[this->pos_] >> 4;      // type including overlength info
-  uint8_t length = this->buffer_[this->pos_] & 0x0f;  // length including TL bytes
+  uint8_t length = this->buffer_[this->pos_] & 0x0f;  // length including TL bytes or length of list
   bool is_list = (type & 0x07) == SML_LIST;
   bool has_extended_length = type & 0x08;  // we have a long list/value (>15 entries)
-  uint8_t parse_length = length;
-  if (has_extended_length) {
+  uint8_t parse_length = length - 1; // length of payload
+  if (has_extended_length) { // only one TL extension supported
     length = (length << 4) + (this->buffer_[this->pos_ + 1] & 0x0f);
-    parse_length = length - 1;
+    parse_length = length - 2;
     this->pos_ += 1;
   }
 
@@ -41,8 +41,8 @@ bool SmlFile::setup_node(SmlNode *node) {
     this->pos_ += 1;
   } else if (is_list) {  // list
     this->pos_ += 1;
-    node->nodes.reserve(parse_length);
-    for (size_t i = 0; i != parse_length; i++) {
+    node->nodes.reserve(length);
+    for (size_t i = 0; i != length; i++) {
       SmlNode child_node = SmlNode();
       if (!this->setup_node(&child_node))
         return false;
